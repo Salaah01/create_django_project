@@ -82,13 +82,17 @@ pip3 install django
 
 case "${DATABASE}" in
 postgresql | postgres)
-  pip3 install psycopg2
+  echo "Please install psycopg2 manually."
   ;;
-oracle | Oracle)
+oracle)
   pip install cx_Oracle
   ;;
-mysql | mySQL)
+mysql)
   pip install mysql-connector-python
+  ;;
+?)
+  echo "Database (${DATABASE}) not recognised."
+  echo "Please run pip install manually."
   ;;
 esac
 
@@ -109,23 +113,54 @@ echo "${APPS}" | sed s/,/\\n/g | {
 cd "${PROJECT_NAME}"
 
 # Static root rules.
-echo "aaaa ${ADD_STATIC_ROOT_RULES}"
-if [[ "${ADD_STATIC_ROOT_RULES}" -eq 1 ]]
-then
-  echo "STATIC_ROOT = os.path.join(BASE_DIR, 'static')" >> settings.py
-  echo "STATICFILES_DIRS = [" >> settings.py
-  echo "    os.path.join(BASE_DIR, '${PROJECT_NAME}/static')," >> settings.py
-  echo "]" >> settings.py
-  echo "" >> settings.py
+if [[ "${ADD_STATIC_ROOT_RULES}" -eq 1 ]]; then
+  echo "STATIC_ROOT = os.path.join(BASE_DIR, 'static')" >>settings.py
+  echo "STATICFILES_DIRS = [" >>settings.py
+  echo "    os.path.join(BASE_DIR, '${PROJECT_NAME}/static')," >>settings.py
+  echo "]" >>settings.py
+  echo "" >>settings.py
 fi
 
 # Media root rules.
-if [[ "${ADD_MEDA_ROOT_RULES}"  -eq 1 ]]
-then
-  echo "# Media Folder Settings" >> settings.py
-  echo "MEDIA_ROOT = os.path.join(BASE_DIR, 'media')" >> settings.py
-  echo "MEDIA_URL = '/media/'" >> settings.py
-  echo "" >> settings.py
+if [[ "${ADD_MEDA_ROOT_RULES}" -eq 1 ]]; then
+  echo "# Media Folder Settings" >>settings.py
+  echo "MEDIA_ROOT = os.path.join(BASE_DIR, 'media')" >>settings.py
+  echo "MEDIA_URL = '/media/'" >>settings.py
+  echo "" >>settings.py
 fi
 
+# Update ``SECRET_KEY``, ``DEBUG`` and ``TEMPLATES`` variables.
 sed -i.bak "s/SECRET_KEY = '.*/SECRET_KEY = os.getenv('DJANGO_SECRET_KEY')/" settings.py
+sed -i.bak "s/DEBUG = True/DEBUG = bool(int(os.getenv('DJANGO_DEBUG', 0)))/" settings.py
+sed -i.bak "s/'DIRS': \[\],/'DIRS': [os.path.join(BASE_DIR, 'templates')],/" settings.py
+
+# Update database settings.
+if [[ -z "${DATABASE}" ]]; then
+  echo "Database argument is not set."
+  echo "Database settings will not be updated"
+else
+  case "${DATABASE}" in
+  postgres | postgresql)
+    export DB_ENGINE=django.db.backends.postgresql
+    DATABASE_SETTINGS_UPDATED=1
+    ;;
+  mysql)
+    export DB_ENGINE=django.db.backends.mysql
+    DATABASE_SETTINGS_UPDATED=1
+    ;;
+  oracle)
+    export DB_ENGINE=django.db.backends.oracle
+    DATABASE_SETTINGS_UPDATED=1
+    ;;
+  ?)
+    echo "Database (${DATABASE}) not recognised."
+    echo "Please update database settings manually."
+    ;;
+  esac
+
+  if [[ "${DATABASE_SETTINGS_UPDATED}" -eq 1 ]]; then
+    sed -i.bak "s/'django.db.backends.sqlite3',/os.getenv('DB_ENGINE'),/" settings.py
+    sed -i.bak "s/BASE_DIR \/ 'db.sqlite3',/os.getenv('DB_NAME'),\n\t\t'USER': os.getenv('DB_USER'),\n\t\t'PASSWORD': os.getenv('DB_PASSWORD'),\n\t\t'PORT': os.getenv('DB_PORT'),\n\t\t'HOST': os.getenv('DB_HOST')/" settings.py
+  else
+  fi
+fi
