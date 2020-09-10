@@ -54,6 +54,7 @@ while getopts p:d:a:sm OPTION; do
     ;;
   a)
     APPS="${APPS},${OPTARG}"
+    PARSE_APPS_PATTERN="s/,/\\n/g"
     ;;
   s)
     ADD_STATIC_ROOT_RULES=1
@@ -101,7 +102,7 @@ django-admin startproject "${PROJECT_NAME}"
 cd "${PROJECT_NAME}"
 
 # Django start app
-echo "${APPS}" | sed s/,/\\n/g | {
+echo "${APPS}" | sed "{$PARSE_APPS_PATTERN}" | {
   while read app; do
     if [[ $(echo "${app}" | wc -w) -ne 0 ]]; then
       python3 manage.py startapp "${app}"
@@ -161,6 +162,52 @@ else
   if [[ "${DATABASE_SETTINGS_UPDATED}" -eq 1 ]]; then
     sed -i.bak "s/'django.db.backends.sqlite3',/os.getenv('DB_ENGINE'),/" settings.py
     sed -i.bak "s/BASE_DIR \/ 'db.sqlite3',/os.getenv('DB_NAME'),\n\t\t'USER': os.getenv('DB_USER'),\n\t\t'PASSWORD': os.getenv('DB_PASSWORD'),\n\t\t'PORT': os.getenv('DB_PORT'),\n\t\t'HOST': os.getenv('DB_HOST')/" settings.py
-  else
   fi
 fi
+
+# Update root URLs.
+echo -e '"""Root URL Configurations."""' >urls.py
+echo -e "from django.contrib import admin" >>urls.py
+echo -e "from django.urls import path, include" >>urls.py
+echo -e "from django.conf import settings" >>urls.py
+echo -e "from django.conf.urls.static import static" >>urls.py
+echo -e "" >>urls.py
+echo -e "" >>urls.py
+echo -e "urlpatterns = [" >>urls.py
+echo -e "\tpath('admin/', admin.site.urls)," >>urls.py
+
+echo "${APPS}" | sed "{$PARSE_APPS_PATTERN}" | {
+  while read app; do
+    # Update the root urls.py to include each app.
+    echo -e "\tpath('${app}/', include('${app}.urls'))," >>urls.py
+  done
+}
+echo "] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)" >>urls.py
+
+# Set up files within each app.
+cd ..
+echo "${APPS}" | sed "{$PARSE_APPS_PATTERN}" | {
+  while read app; do
+    # Create templates and static directories.
+    mkdir -p "${app}/templates/${app}"
+    mkdir -p "${app}/static/${app}/css"
+    mkdir -p "${app}/static/${app}/sass"
+    mkdir -p "${app}/static/${app}/js"
+    mkdir -p "${app}/static/${app}/ts"
+    mkdir -p "${app}/static/${app}/img"
+
+    # Set up views and urls.
+    echo "from django.urls import path" >"${app}/urls.py"
+    echo "from . import views" >>"${app}/urls.py"
+    echo "" >>"${app}/urls.py"  
+    echo "" >>"${app}/urls.py" 
+    echo "urlpatterns = []" >>"${app}/urls.py"
+    rm "${app}/views.py"
+    rm "${app}/tests.py"
+    mkdir -p "${app}/views"
+    mkdir -p "${app}/tests"
+    touch "${app}/views/__init__.py"
+    touch "${app}/tests/__init__.py"
+  done
+}
+
