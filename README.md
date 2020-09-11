@@ -21,7 +21,6 @@ bash django_project_creator -p PROJECT_NAME [options]
     **django_project_creator** is a bash script that would create a Django project on a Ubuntu machine.
 
 The script will do the following:
-* Install python3, python3-venv and python3-pip if it is not already installed.
 * Creates a virtual environment and installs Django.
 * Creates a django project using the PACKAGE_NAME and APPS.
 * Set static root and media root rules.
