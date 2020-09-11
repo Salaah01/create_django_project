@@ -10,37 +10,20 @@ usage() {
   echo '  -m                Update settings: add media root rules.'
   exit 1
 }
-
-# Install Python
+# Check required packages are installed.
 if [[ $(dpkg -l | grep python3 | wc -l) -eq 0 ]]; then
-  echo "python3 will be installed."
-  apt-get -y install python3
-fi
-
-if [[ "${?}" -ne 0 ]]; then
-  echo "Could not install python3." >&2
+  echo "Install python3 and try again." >&2
   exit 1
 fi
 
-# Install Python venv
 if [[ $(dpkg -l | grep python3-venv | wc -l) -eq 0 ]]; then
-  echo "python3-venv will be installed."
-  apt-get -y install python3-venv
-fi
-
-if [[ "${?}" -ne 0 ]]; then
-  echo "Could not install python3-venv." >&2
+  echo "Install python3-venv and try again." >&2
   exit 1
 fi
 
 # Install Pip3
 if [[ $(dpkg -l | grep python3-pip | wc -l) -eq 0 ]]; then
-  echo "python3-pip will be installed."
-  apt-get -y install python3-pip
-fi
-
-if [[ "${?}" -ne 0 ]]; then
-  echo "Could not install python3-pip." >&2
+  echo "Install pip3 and try again" >&2
   exit 1
 fi
 
@@ -83,7 +66,8 @@ pip3 install django
 
 case "${DATABASE}" in
 postgresql | postgres)
-  echo "Please install psycopg2 manually."
+  # Sometimes there is an issue with install psycopg2 on linux.
+  POST_MSG="${POST_MSG}Run pip3 install pyscopg2\n"
   ;;
 oracle)
   pip install cx_Oracle
@@ -92,8 +76,8 @@ mysql)
   pip install mysql-connector-python
   ;;
 ?)
-  echo "Database (${DATABASE}) not recognised."
-  echo "Please run pip install manually."
+  POST_MSG="${POST_MSG}Database (${DATABASE}) not recognised.\n"
+  POST_MSG="${POST_MSG}Please run pip install manually.\n"
   ;;
 esac
 
@@ -133,31 +117,35 @@ fi
 # Update ``SECRET_KEY``, ``DEBUG`` and ``TEMPLATES`` variables.
 sed -i.bak "s/from pathlib import Path/from pathlib import Path\nimport os/" settings.py
 DJANGO_SECRET_KEY=$(grep SECRET_KEY settings.py | awk -F"'" '{print $2}')
+POST_MSG="${POST_MSG}Run export DJANGO_SECRET_KEY='${DJANGO_SECRET_KEY}'\n"
 sed -i.bak "s/SECRET_KEY = '.*/SECRET_KEY = os.getenv('DJANGO_SECRET_KEY')/" settings.py
 sed -i.bak "s/DEBUG = True/DEBUG = bool(int(os.getenv('DJANGO_DEBUG', 0)))/" settings.py
 sed -i.bak "s/'DIRS': \[\],/'DIRS': [os.path.join(BASE_DIR, 'templates')],/" settings.py
 
 # Update database settings.
 if [[ -z "${DATABASE}" ]]; then
-  echo "Database argument is not set."
-  echo "Database settings will not be updated"
+  POST_MSG="${POST_MSG}Database argument is not set.\n"
+  POST_MSG="${POST_MSG}Database settings will not be updated.\n"
+  POST_MSG="${POST_MSG}Creating sqlite3 database.\n"
+  touch ../db.sqlite3
+  chmod 755 ../db.sqlite3
 else
   case "${DATABASE}" in
   postgres | postgresql)
-    export DB_ENGINE=django.db.backends.postgresql
+    POST_MSG="${POST_MSG}Run export DB_ENGINE=django.db.backends.postgresql\n"
     DATABASE_SETTINGS_UPDATED=1
     ;;
   mysql)
-    export DB_ENGINE=django.db.backends.mysql
+    POST_MSG="${POST_MSG}Run export DB_ENGINE=django.db.backends.mysql\n"
     DATABASE_SETTINGS_UPDATED=1
     ;;
   oracle)
-    export DB_ENGINE=django.db.backends.oracle
+    POST_MSG="${POST_MSG}Run export DB_ENGINE=django.db.backends.oracle\n"
     DATABASE_SETTINGS_UPDATED=1
     ;;
   ?)
-    echo "Database (${DATABASE}) not recognised."
-    echo "Please update database settings manually."
+    POST_MSG="{$POST_MSG}Database (${DATABASE}) not recognised.\n"
+    POST_MSG="{$POST_MSG}Please update database settings manually.\n"
     ;;
   esac
 
@@ -193,28 +181,38 @@ echo "] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)" >>urls.
 cd ..
 echo "${APPS}" | sed "{$PARSE_APPS_PATTERN}" | {
   while read app; do
-    # Create templates and static directories.
-    mkdir -p "${app}/templates/${app}"
-    mkdir -p "${app}/static/${app}/css"
-    mkdir -p "${app}/static/${app}/sass"
-    mkdir -p "${app}/static/${app}/js"
-    mkdir -p "${app}/static/${app}/ts"
-    mkdir -p "${app}/static/${app}/img"
+    if [[ $(echo "${app}" | wc -w) -ne 0 ]]; then
+      # Create templates and static directories.
+      mkdir -p "${app}/templates/${app}"
+      mkdir -p "${app}/static/${app}/css"
+      mkdir -p "${app}/static/${app}/sass"
+      mkdir -p "${app}/static/${app}/js"
+      mkdir -p "${app}/static/${app}/ts"
+      mkdir -p "${app}/static/${app}/img"
 
-    # Set up views and urls.
-    echo "from django.urls import path" >"${app}/urls.py"
-    echo "from . import views" >>"${app}/urls.py"
-    echo "" >>"${app}/urls.py"
-    echo "" >>"${app}/urls.py"
-    echo "urlpatterns = []" >>"${app}/urls.py"
-    rm "${app}/views.py"
-    rm "${app}/tests.py"
-    mkdir -p "${app}/views"
-    mkdir -p "${app}/tests"
-    touch "${app}/views/__init__.py"
-    touch "${app}/tests/__init__.py"
+      # Set up views and urls.
+      echo "from django.urls import path" >"${app}/urls.py"
+      echo "from . import views" >>"${app}/urls.py"
+      echo "" >>"${app}/urls.py"
+      echo "" >>"${app}/urls.py"
+      echo "urlpatterns = []" >>"${app}/urls.py"
+      rm "${app}/views.py"
+      rm "${app}/tests.py"
+      mkdir -p "${app}/views"
+      mkdir -p "${app}/tests"
+      touch "${app}/views/__init__.py"
+      touch "${app}/tests/__init__.py"
+    fi
   done
 }
 
-# Make migrations.
-python3 manage.py makemigrations
+echo "\nSetup complete. Please run the adhere to the following:"
+echo -e ${POST_MSG}
+
+if [[ "${UID}" -eq 0 ]]
+then
+  echo "You have run this script as root."
+  echo "You may wish to change the ownership (chown) and group (chgrp) to your own user if you are not root."
+fi
+
+echo "Run manage.py migration commands."
