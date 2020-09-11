@@ -5,7 +5,7 @@ usage() {
   echo 'Create a Django project.' >&2
   echo '  -p  PROJECT_NAME  Specify the project name.' >&2
   echo '  -d  DATABASE      Database name.' >&2
-  echo '  -a  APP(S)        App(s) seperated with ",".' >&2
+  echo '  -a  APP(S)        App(s) to be created and set up.' >&2
   echo '  -s                Update settings: add static root rules.'
   echo '  -m                Update settings: add media root rules.'
   exit 1
@@ -199,8 +199,8 @@ echo "${APPS}" | sed "{$PARSE_APPS_PATTERN}" | {
     # Set up views and urls.
     echo "from django.urls import path" >"${app}/urls.py"
     echo "from . import views" >>"${app}/urls.py"
-    echo "" >>"${app}/urls.py"  
-    echo "" >>"${app}/urls.py" 
+    echo "" >>"${app}/urls.py"
+    echo "" >>"${app}/urls.py"
     echo "urlpatterns = []" >>"${app}/urls.py"
     rm "${app}/views.py"
     rm "${app}/tests.py"
@@ -210,4 +210,3 @@ echo "${APPS}" | sed "{$PARSE_APPS_PATTERN}" | {
     touch "${app}/tests/__init__.py"
   done
 }
-
