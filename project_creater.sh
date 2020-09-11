@@ -131,6 +131,8 @@ if [[ "${ADD_MEDA_ROOT_RULES}" -eq 1 ]]; then
 fi
 
 # Update ``SECRET_KEY``, ``DEBUG`` and ``TEMPLATES`` variables.
+sed -i.bak "s/from pathlib import Path/from pathlib import Path\nimport os/" settings.py
+DJANGO_SECRET_KEY=$(grep SECRET_KEY settings.py | awk -F"'" '{print $2}')
 sed -i.bak "s/SECRET_KEY = '.*/SECRET_KEY = os.getenv('DJANGO_SECRET_KEY')/" settings.py
 sed -i.bak "s/DEBUG = True/DEBUG = bool(int(os.getenv('DJANGO_DEBUG', 0)))/" settings.py
 sed -i.bak "s/'DIRS': \[\],/'DIRS': [os.path.join(BASE_DIR, 'templates')],/" settings.py
@@ -178,8 +180,11 @@ echo -e "\tpath('admin/', admin.site.urls)," >>urls.py
 
 echo "${APPS}" | sed "{$PARSE_APPS_PATTERN}" | {
   while read app; do
-    # Update the root urls.py to include each app.
-    echo -e "\tpath('${app}/', include('${app}.urls'))," >>urls.py
+    if [[ $(echo "${app}" | wc -w) -ne 0 ]]; then
+      # Update the root urls.py to include each app.
+      echo -e "\tpath('${app}/', include('${app}.urls'))," >>urls.py
+      sed -i.bak "s/'django.contrib.admin',/'${app}',\n\t'django.contrib.admin',/" settings.py
+    fi
   done
 }
 echo "] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)" >>urls.py
@@ -210,3 +215,6 @@ echo "${APPS}" | sed "{$PARSE_APPS_PATTERN}" | {
     touch "${app}/tests/__init__.py"
   done
 }
+
+# Make migrations.
+python3 manage.py makemigrations

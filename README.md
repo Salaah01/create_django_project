@@ -33,4 +33,4 @@ The script will do the following:
 * Inside each app directory create a ``urls.py`` file with basic configurations.
 * Remove ``views.py`` and ``tests.py`` in each directory and create a views and tests directory with an ``__init__.py`` inside each directory.
 * In each app directory create template and static directories with related sub-directories.
-
+* Updates ``INSTALLED_APPS``.
