@@ -1,4 +1,4 @@
-# Django Project Creator
+# Create Django Project Script
 
 A bash script to create and setup a Django project.
 
